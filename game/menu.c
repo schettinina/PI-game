@@ -1,6 +1,8 @@
 #include "raylib.h"
+#include "fase1.h" 
 
-typedef enum GameScreen {TITULO, JOGO, CREDITOS} GameScreen;
+
+typedef enum GameScreen {TITULO, JOGO, FASE2, CREDITOS} GameScreen;
 
 int main(void)
 {
@@ -9,12 +11,12 @@ int main(void)
     const int screenHeight = 450;
 
     //Inicializando a janela
-    InitWindow(screenWidth, screenHeight, "Jogo");
+    InitWindow(screenWidth, screenHeight, "Jogo - Batalha contra o Boss");
     
     //Carregando imagens para cada tela
     Texture2D start = LoadTexture("images/start.jpg");
     Texture2D cred = LoadTexture("images/cred.jpg");
-    Texture2D jogo = LoadTexture("images/gameplay.png");
+    Texture2D jogo = LoadTexture("images/gameplay.png"); // Fundo da fase
 
     SetExitKey(KEY_NULL);
 
@@ -27,28 +29,62 @@ int main(void)
     //Loop principal
     while (!WindowShouldClose())
     {
+        // --- LOGICA GERAL (ESC) ---
         if (IsKeyPressed(KEY_ESCAPE))
         {
-            //Fechar o jogo somente na tela inicial (ao clicar ESCAPE)
+            // Se estiver no Título, fecha o jogo
             if (telaAtual == TITULO)
             {
                 break;
             }
             else
             {
-                //Volta à tela inicial
+                // Qualquer outra tela volta para o Título
                 telaAtual = TITULO;
             }
         }
 
-        //Sistema de troca de janelas
+        // --- SISTEMA DE TROCA DE JANELAS E LÓGICA ---
+        
+        // Lógica do TÍTULO
         if (telaAtual == TITULO)
         {
-            if (IsKeyPressed(KEY_ENTER)) telaAtual = JOGO;
+            if (IsKeyPressed(KEY_ENTER)) 
+            {
+                InitFase1(); // <--- Zera a vida e posição antes de começar
+                telaAtual = JOGO;
+            }
             if (IsKeyPressed(KEY_C)) telaAtual = CREDITOS;
         }
         
-        //Desenhando na tela
+        // Lógica da FASE 1 (JOGO)
+        else if (telaAtual == JOGO)
+        {
+            // Roda a lógica da batalha e pega o resultado
+            int resultado = UpdateFase1(); 
+
+            if (resultado == 1) 
+            {
+                // VITORIA: Vai para a tela de parabéns
+                telaAtual = FASE2; 
+            }
+            else if (resultado == 2) 
+            {
+                // DERROTA: Reinicia a batalha imediatamente
+                InitFase1(); 
+            }
+        }
+
+        // Lógica da TELA DE VITÓRIA (FASE 2)
+        else if (telaAtual == FASE2)
+        {
+            if (IsKeyPressed(KEY_ENTER)) 
+            {
+                telaAtual = TITULO; // Volta pro menu 
+            }
+        }
+        
+        //Tela
         BeginDrawing();
 
             ClearBackground(RAYWHITE);
@@ -57,51 +93,58 @@ int main(void)
             {
                 case TITULO:
                 {
-                    //Ajustando imagem para as dimensões da janela
                     DrawTexturePro(
                         start,
                         (Rectangle){0, 0, (float)start.width, (float)start.height},
                         (Rectangle){0, 0, (float)screenWidth, (float)screenHeight},
-                        (Vector2){0, 0},
-                        0.0f,
-                        WHITE);
+                        (Vector2){0, 0}, 0.0f, WHITE);
 
                 } break;
+
                 case JOGO:
                 {
-                    //Ajustando imagem para as dimensões da janela
                     DrawTexturePro(
                         jogo,
                         (Rectangle){0, 0, (float)jogo.width, (float)jogo.height},
                         (Rectangle){0, 0, (float)screenWidth, (float)screenHeight},
-                        (Vector2){0, 0},
-                        0.0f,
-                        WHITE);
+                        (Vector2){0, 0}, 0.0f, WHITE);
+                    
+                    //Desenha os personagens
+                    DrawFase1();
 
                 } break;
+
+                case FASE2: //Tela de Vitória
+                {
+                    
+                    ClearBackground(RAYWHITE);
+                    DrawText("PARABENS!", 280, 150, 40, GOLD);
+                    DrawText("VOCE DERROTOU O BOSS", 240, 200, 20, DARKGRAY);
+                    DrawText("Pressione ENTER para voltar", 250, 300, 20, LIGHTGRAY);
+
+                } break;
+
                 case CREDITOS:
                 {
-                    //Ajustando imagem para as dimensões da janela
                     DrawTexturePro(
                         cred,
                         (Rectangle){0, 0, (float)cred.width, (float)cred.height},
                         (Rectangle){0, 0, (float)screenWidth, (float)screenHeight},
-                        (Vector2){0, 0},
-                        0.0f,
-                        WHITE);
+                        (Vector2){0, 0}, 0.0f, WHITE);
 
                 } break;
+                
                 default: break;
             }
 
         EndDrawing();
-
     }
+
+    //Limpeza de memória
     UnloadTexture(start);
     UnloadTexture(cred);
     UnloadTexture(jogo);
     CloseWindow();
-
 
     return 0;
 }
