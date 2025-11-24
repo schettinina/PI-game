@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "fase1.h" 
+#include "fase1.c"
 
 
 typedef enum GameScreen {TITULO, JOGO, FASE2, CREDITOS} GameScreen;
@@ -12,11 +13,17 @@ int main(void)
 
     //Inicializando a janela
     InitWindow(screenWidth, screenHeight, "Jogo - Batalha contra o Boss");
+    //Inicializando dispositivo de música
+    InitAudioDevice();
     
     //Carregando imagens para cada tela
     Texture2D start = LoadTexture("images/start.jpg");
     Texture2D cred = LoadTexture("images/cred.jpg");
     Texture2D jogo = LoadTexture("images/gameplay.png"); // Fundo da fase
+    
+    //Carregando as músicas
+    Music luta = LoadMusicStream("music/luta.mp3");
+    luta.looping = true;
 
     SetExitKey(KEY_NULL);
 
@@ -29,6 +36,7 @@ int main(void)
     //Loop principal
     while (!WindowShouldClose())
     {
+        UpdateMusicStream(luta);
         // --- LOGICA GERAL (ESC) ---
         if (IsKeyPressed(KEY_ESCAPE))
         {
@@ -51,7 +59,8 @@ int main(void)
         {
             if (IsKeyPressed(KEY_ENTER)) 
             {
-                InitFase1(); // <--- Zera a vida e posição antes de começar
+                InitFase1();// <--- Zera a vida e posição antes de começar
+                PlayMusicStream(luta);
                 telaAtual = JOGO;
             }
             if (IsKeyPressed(KEY_C)) telaAtual = CREDITOS;
@@ -103,12 +112,6 @@ int main(void)
 
                 case JOGO:
                 {
-                    DrawTexturePro(
-                        jogo,
-                        (Rectangle){0, 0, (float)jogo.width, (float)jogo.height},
-                        (Rectangle){0, 0, (float)screenWidth, (float)screenHeight},
-                        (Vector2){0, 0}, 0.0f, WHITE);
-                    
                     //Desenha os personagens
                     DrawFase1();
 
@@ -144,6 +147,8 @@ int main(void)
     UnloadTexture(start);
     UnloadTexture(cred);
     UnloadTexture(jogo);
+    UnloadMusicStream(luta);
+    CloseAudioDevice();
     CloseWindow();
 
     return 0;
