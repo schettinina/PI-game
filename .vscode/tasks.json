@@ -2,15 +2,25 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Compilar Raylib",
-            "type": "shell",
-            "command": "gcc",
+            "label": "Compilar Jogo Completo",
+            "type": "process",
+            "command": "C:\\raylib\\w64devkit\\bin\\gcc.exe",
+            "options": {
+                "cwd": "${workspaceFolder}/game",
+                "env": {
+                    "PATH": "C:\\raylib\\w64devkit\\bin;${env:PATH}"
+                }
+            },
             "args": [
-                "${fileDirname}/*.c",
+                "-std=c99",
+                "menu.c",
+                "fase1.c",
+                "fase2.c",
+                
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}.exe",
-                "-I", "C:/raylib/include",
-                "-L", "C:/raylib/lib",
+                "jogo.exe",
+                "-I", "C:\\raylib\\raylib\\src",
+                "-L", "C:\\raylib\\raylib\\src",
                 "-lraylib",
                 "-lopengl32",
                 "-lgdi32",
@@ -21,7 +31,10 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Compila menu.c e fase1.c juntos na pasta game"
         }
     ]
 }
