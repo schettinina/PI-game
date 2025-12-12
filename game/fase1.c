@@ -3,12 +3,10 @@
 #include <stdio.h>
 #include "raylib.h"
 
-//Ajustes
 #define MAX_TIROS 5
 #define DANO_ESPADADA 15
 #define DANO_EXPLOSAO 60
 
-//Estruturas
 typedef struct {
     Vector2 posicao;
     Vector2 velocidade; 
@@ -30,7 +28,6 @@ typedef struct {
     bool usandoExplosao;
 } Personagem;
 
-//Globais
 static Personagem jogador;
 static Personagem chefe;
 static Projetil projeteis[MAX_TIROS];
@@ -38,20 +35,15 @@ static Projetil projeteis[MAX_TIROS];
 static int tempoDanoChefe = 0;
 static int resultadoFase = 0;
 
-// Variáveis de Status e Loja
 static float velocidadeMovimento = 4.0f;
 static float velocidadeTiro = 7.0f;
 static int danoTiroAtual = 10;
 static int moedas = 0;
 static bool lojaAberta = false;
-
-/*Variavel de Pause*/
 static bool jogoPausado = false;
 
-//Funções
 void InitFase1(void)
 {
-    //Jogador
     jogador.posicao = (Vector2){ 100, 200 };
     jogador.retangulo = (Rectangle){ 100, 200, 40, 40 };
     jogador.vidaMaxima = 80;
@@ -64,25 +56,20 @@ void InitFase1(void)
     jogador.usandoEspada = false;
     jogador.usandoExplosao = false;
 
-    //Chefe
     chefe.posicao = (Vector2){ 600, 200 };
     chefe.retangulo = (Rectangle){ 600, 200, 80, 80 };
     chefe.vidaMaxima = 1500;
     chefe.vida = 1500;
     chefe.corPersonagem = RED;
 
-    //Projeteis
     for (int i = 0; i < MAX_TIROS; i++) projeteis[i].ativo = false;
 
-    // Reseta Status
     velocidadeMovimento = 4.0f;
     velocidadeTiro = 7.0f;
-    danoTiroAtual = 1000;
+    danoTiroAtual = 10;
     moedas = 0;
     lojaAberta = false;
     resultadoFase = 0;
-    
-    // Reseta o Pause
     jogoPausado = false;
 }
 
@@ -90,26 +77,18 @@ int UpdateFase1(void)
 {
     if (resultadoFase != 0) return resultadoFase;
 
-    // Logica do pause
-    // Se apertar P, inverte o estado (de pausado pra normal e vice-versa)
     if (IsKeyPressed(KEY_P)) 
     {
         jogoPausado = !jogoPausado;
     }
 
-    // Se estiver pausado, NÃO roda o resto do código abaixo
-    if (jogoPausado) 
-    {
-        return 0; // Retorna 0 (continuar jogando), mas sem atualizar posições
-    }
+    if (jogoPausado) return 0;
 
-    // Lógica da loja
     if (lojaAberta)
     {
         Vector2 mouse = GetMousePosition();
 
-        // Botões da Loja
-        Rectangle btnTiro = { 200, 150, 400, 40 };
+        Rectangle btnTiro = { 180, 150, 440, 40 };
         if (CheckCollisionPointRec(mouse, btnTiro) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             if (moedas >= 30) {
                 moedas -= 30;
@@ -117,7 +96,7 @@ int UpdateFase1(void)
             }
         }
 
-        Rectangle btnSpeed = { 200, 200, 400, 40 };
+        Rectangle btnSpeed = { 180, 200, 440, 40 };
         if (CheckCollisionPointRec(mouse, btnSpeed) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             if (moedas >= 25) {
                 moedas -= 25;
@@ -125,7 +104,7 @@ int UpdateFase1(void)
             }
         }
 
-        Rectangle btnDano = { 200, 250, 400, 40 };
+        Rectangle btnDano = { 180, 250, 440, 40 };
         if (CheckCollisionPointRec(mouse, btnDano) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             if (moedas >= 40) {
                 moedas -= 40;
@@ -136,17 +115,14 @@ int UpdateFase1(void)
 
         Rectangle btnSair = { 300, 350, 200, 50 };
         if (CheckCollisionPointRec(mouse, btnSair) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            resultadoFase = 1; // Avança de fase
+            resultadoFase = 1;
         }
 
         return 0;
     }
 
-    
-
     Vector2 inputMovimento = {0.0f, 0.0f};
 
-    //Movimento do jogador
     if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) inputMovimento.x += 1.0f;
     if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))  inputMovimento.x -= 1.0f;
     if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))    inputMovimento.y -= 1.0f;
@@ -162,18 +138,15 @@ int UpdateFase1(void)
     int largura = GetScreenWidth();
     int altura  = GetScreenHeight();
 
-    //Limites de tela
     if (jogador.posicao.x > largura) jogador.posicao.x = -jogador.retangulo.width;
     else if (jogador.posicao.x < -jogador.retangulo.width) jogador.posicao.x = largura;
 
     if (jogador.posicao.y > altura) jogador.posicao.y = -jogador.retangulo.height;
     else if (jogador.posicao.y < -jogador.retangulo.height) jogador.posicao.y = altura;
 
-    //Hitbox
     jogador.retangulo.x = jogador.posicao.x;
     jogador.retangulo.y = jogador.posicao.y;
 
-    //Cooldowns
     if (jogador.tempoRecargaEspada > 0) jogador.tempoRecargaEspada--;
     if (jogador.tempoRecargaTiro > 0) jogador.tempoRecargaTiro--;
     if (jogador.tempoRecargaExplosao > 0) jogador.tempoRecargaExplosao--;
@@ -181,7 +154,6 @@ int UpdateFase1(void)
     jogador.usandoEspada = false;
     jogador.usandoExplosao = false;
 
-   
     if (IsKeyPressed(KEY_SPACE) && jogador.tempoRecargaEspada == 0)
     {
         jogador.usandoEspada = true;
@@ -194,7 +166,6 @@ int UpdateFase1(void)
         }
     }
 
-    //Ataque em 360 graus
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsKeyPressed(KEY_Z)) 
     {
         if (jogador.tempoRecargaTiro == 0)
@@ -219,7 +190,6 @@ int UpdateFase1(void)
         }
     }
 
-    
     for (int i = 0; i < MAX_TIROS; i++)
     {
         if (projeteis[i].ativo)
@@ -242,7 +212,6 @@ int UpdateFase1(void)
         }
     }
 
-   /*explosao do jogador*/
     if (IsKeyPressed(KEY_X) && jogador.tempoRecargaExplosao == 0)
     {
         jogador.usandoExplosao = true;
@@ -261,7 +230,6 @@ int UpdateFase1(void)
         }
     }
 
-    /*Ia/movimentacao do chefe*/
     if (chefe.posicao.x < jogador.posicao.x - 1) chefe.posicao.x += 1.8f;
     else if (chefe.posicao.x > jogador.posicao.x + 1) chefe.posicao.x -= 1.8f;
 
@@ -271,11 +239,9 @@ int UpdateFase1(void)
     chefe.retangulo.x = chefe.posicao.x;
     chefe.retangulo.y = chefe.posicao.y;
 
-    
     if (CheckCollisionRecs(jogador.retangulo, chefe.retangulo))
         jogador.vida -= 2;
 
-    
     if (chefe.vida <= 0 && !lojaAberta) 
     { 
         chefe.vida = 0; 
@@ -290,7 +256,6 @@ int UpdateFase1(void)
 
 void DrawFase1(void)
 {
-    
     DrawRectangleRec(jogador.retangulo, jogador.corPersonagem);
 
     if (jogador.usandoEspada)
@@ -324,29 +289,68 @@ void DrawFase1(void)
     DrawText("X: Explosão", 460, 420, 10, corExplosao);
     DrawCircleV(GetMousePosition(), 5, RED);
 
-    /* Desenho do pause*/
     if (jogoPausado)
     {
-        
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.5f));
-        // Texto piscando ou fixo
         DrawText("JOGO PAUSADO", 280, 200, 30, WHITE);
         DrawText("Pressione P para continuar", 260, 240, 20, LIGHTGRAY);
     }
 
-    /*LOJA */
     if (lojaAberta && !jogoPausado)
     {
-        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.8f));
+        Vector2 mouse = GetMousePosition();
+        
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.85f));
         DrawText("LOJA DE UPGRADES", 280, 80, 30, GOLD);
         DrawText(TextFormat("MOEDAS: %d", moedas), 350, 120, 20, YELLOW);
-        DrawRectangle(200, 150, 400, 40, LIGHTGRAY);
-        DrawText("+25% Velocidade do Tiro (30 moedas)", 220, 160, 20, DARKGRAY);
-        DrawRectangle(200, 200, 400, 40, LIGHTGRAY);
-        DrawText("+25% Velocidade de Movimento (25 moedas)", 220, 210, 20, DARKGRAY);
-        DrawRectangle(200, 250, 400, 40, LIGHTGRAY);
-        DrawText("Arma Dano+ (40 moedas)", 220, 260, 20, DARKGRAY);
-        DrawRectangle(300, 350, 200, 50, GREEN);
+
+        Rectangle btnTiro = { 180, 150, 440, 40 };
+        Color corBtn1 = LIGHTGRAY;
+        Color corTexto1 = DARKGRAY;
+        
+        if (CheckCollisionPointRec(mouse, btnTiro)) {
+            corBtn1 = SKYBLUE;
+            corTexto1 = BLACK;
+        }
+        
+        DrawRectangleRec(btnTiro, corBtn1);
+        DrawRectangleLinesEx(btnTiro, 2, WHITE);
+        DrawText("+25% Velocidade do Tiro (30 moedas)", 200, 160, 18, corTexto1);
+
+        Rectangle btnSpeed = { 180, 200, 440, 40 };
+        Color corBtn2 = LIGHTGRAY;
+        Color corTexto2 = DARKGRAY;
+
+        if (CheckCollisionPointRec(mouse, btnSpeed)) {
+            corBtn2 = SKYBLUE;
+            corTexto2 = BLACK;
+        }
+
+        DrawRectangleRec(btnSpeed, corBtn2);
+        DrawRectangleLinesEx(btnSpeed, 2, WHITE);
+        DrawText("+25% Velocidade de Movimento (25 moedas)", 200, 210, 18, corTexto2);
+
+        Rectangle btnDano = { 180, 250, 440, 40 };
+        Color corBtn3 = LIGHTGRAY;
+        Color corTexto3 = DARKGRAY;
+
+        if (CheckCollisionPointRec(mouse, btnDano)) {
+            corBtn3 = ORANGE;
+            corTexto3 = BLACK;
+        }
+
+        DrawRectangleRec(btnDano, corBtn3);
+        DrawRectangleLinesEx(btnDano, 2, WHITE);
+        DrawText("Arma Dano+ (40 moedas)", 200, 260, 18, corTexto3);
+
+        Rectangle btnSair = { 300, 350, 200, 50 };
+        Color corSair = GREEN;
+        
+        if (CheckCollisionPointRec(mouse, btnSair)) {
+            corSair = LIME;
+        }
+
+        DrawRectangleRec(btnSair, corSair);
         DrawText("AVANCAR >>", 340, 365, 20, BLACK);
     }
 }
