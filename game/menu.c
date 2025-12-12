@@ -93,6 +93,41 @@ int main(void)
                         (Rectangle){0, 0, (float)screenWidth, (float)screenHeight},
                         (Vector2){0, 0}, 0.0f, WHITE);
 
+                    // Botões interativos: Começar e Créditos
+                    Rectangle startBtn = {(float)screenWidth/2 - 100.0f, 300.0f, 200.0f, 60.0f};
+                    Rectangle creditsBtn = {(float)screenWidth/2 - 100.0f, 380.0f, 200.0f, 60.0f};
+                    Vector2 mousePoint = GetMousePosition();
+
+                    bool hoverStart = CheckCollisionPointRec(mousePoint, startBtn);
+                    bool hoverCredits = CheckCollisionPointRec(mousePoint, creditsBtn);
+
+                    Color startColor = hoverStart ? LIGHTGRAY : GRAY;
+                    Color creditsColor = hoverCredits ? LIGHTGRAY : GRAY;
+
+                    DrawRectangleRec(startBtn, startColor);
+                    DrawRectangleRec(creditsBtn, creditsColor);
+
+                    const char *txtStart = "COME\x87AR";
+                    const char *txtCredits = "CR\xC9DITOS";
+                    int fontSize = 20;
+                    DrawText(txtStart, screenWidth/2 - MeasureText(txtStart, fontSize)/2, 315, fontSize, BLACK);
+                    DrawText(txtCredits, screenWidth/2 - MeasureText(txtCredits, fontSize)/2, 395, fontSize, BLACK);
+
+                    // Clique do mouse para ativar opções
+                    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+                    {
+                        if (hoverStart)
+                        {
+                            InitFase1();
+                            PlayMusicStream(luta);
+                            telaAtual = JOGO;
+                        }
+                        else if (hoverCredits)
+                        {
+                            telaAtual = CREDITOS;
+                        }
+                    }
+
                 } break;
 
                 case JOGO:
