@@ -12,4 +12,8 @@ int UpdateFase1(void);
 
 void DrawFase1(void);
 
+void UnloadFase1(void);
+
+void CloseFase1(void);
+
 #endif
