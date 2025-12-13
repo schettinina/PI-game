@@ -33,8 +33,12 @@ static Personagem jogador;
 static Personagem chefe;
 static Projetil projeteis[MAX_TIROS]; // Array de tiros (Object Pooling)
 
+// Variáveis de IMAGEM
+static Texture2D fundoFase1; 
+static Texture2D imgGameOver; // <--- NOVA IMAGEM DE GAME OVER
+
 static int tempoDanoChefe = 0;   // Tempo que o chefe pisca branco ao levar dano
-static int resultadoFase = 0;    // 0: Jogando, 1: Vitória/Próxima Fase, 2: Game Over
+static int resultadoFase = 0;    // 0: Jogando, 1: Vitória/Próxima Fase, 2: Saiu
 
 static float velocidadeMovimento = 4.0f;
 static float velocidadeTiro = 7.0f;
@@ -42,17 +46,16 @@ static int danoTiroAtual = 10;
 static int moedas = 0;           // Moedas ganhas ao derrotar o chefe
 static bool lojaAberta = false;  // Flag para ativar a interface de loja
 static bool jogoPausado = false; // Flag de pause
+static bool gameOverAtivo = false; // <--- Flag para saber se está na tela de morte
 
-// --- Inicialização ---
-void InitFase1(void)
-{
+// --- Função Auxiliar para Resetar o Jogo (Usada no Init e no R) ---
+void ResetarVariaveisFase1(void) {
     // Configura o Jogador
     jogador.posicao = (Vector2){ 100, 200 };
     jogador.retangulo = (Rectangle){ 100, 200, 40, 40 };
     jogador.vidaMaxima = 80;
     jogador.vida = 80;
     jogador.corPersonagem = BLUE;
-
     jogador.tempoRecargaTiro = 0;
     jogador.tempoRecargaExplosao = 0;
     jogador.usandoExplosao = false;
@@ -60,14 +63,14 @@ void InitFase1(void)
     // Configura o Chefe
     chefe.posicao = (Vector2){ 600, 200 };
     chefe.retangulo = (Rectangle){ 600, 200, 80, 80 };
-    chefe.vidaMaxima = 1500;
-    chefe.vida = 1500;
+    chefe.vidaMaxima = 500;
+    chefe.vida = 500;
     chefe.corPersonagem = RED;
 
-    // Reseta todos os projéteis para inativos
+    // Reseta tiros
     for (int i = 0; i < MAX_TIROS; i++) projeteis[i].ativo = false;
 
-    // Reseta status da partida
+    // Reseta status
     velocidadeMovimento = 4.0f;
     velocidadeTiro = 7.0f;
     danoTiroAtual = 10;
@@ -75,13 +78,36 @@ void InitFase1(void)
     lojaAberta = false;
     resultadoFase = 0;
     jogoPausado = false;
+    gameOverAtivo = false;
+    tempoDanoChefe = 0;
+}
+
+// --- Inicialização ---
+void InitFase1(void)
+{
+    // --- CARREGANDO AS IMAGENS ---
+    fundoFase1 = LoadTexture("images/fase1.png"); 
+    imgGameOver = LoadTexture("images/gameover1.png"); // <--- Carrega imagem de Game Over
+
+    ResetarVariaveisFase1();
 }
 
 // --- Loop de Atualização (Lógica) ---
 int UpdateFase1(void)
 {
-    // Se o jogo já acabou (vitória ou derrota), retorna o código imediatamente
+    // Se o jogo já acabou (vitória ou saída forçada), retorna o código
     if (resultadoFase != 0) return resultadoFase;
+
+    // --- LÓGICA DE GAME OVER (Morte) ---
+    if (gameOverAtivo) 
+    {
+        // Se apertar R, reinicia as variáveis e continua jogando
+        if (IsKeyPressed(KEY_R)) {
+            ResetarVariaveisFase1();
+        }
+        // Enquanto estiver morto, não executa o resto do jogo, apenas retorna 0
+        return 0; 
+    }
 
     // Sistema de Pausa
     if (IsKeyPressed(KEY_P)) 
@@ -270,7 +296,7 @@ int UpdateFase1(void)
     // --- Verificação de Game Over ---
     if (jogador.vida <= 0) { 
         jogador.vida = 0; 
-        resultadoFase = 2; // Código 2 = Derrota
+        gameOverAtivo = true; // <--- Ativa a tela de game over
     }
 
     return 0; // Continua jogando
@@ -279,10 +305,18 @@ int UpdateFase1(void)
 // --- Renderização (Desenho) ---
 void DrawFase1(void)
 {
+    // --- DESENHO DO FUNDO (Ajustado à tela) ---
+    Rectangle source = { 0.0f, 0.0f, (float)fundoFase1.width, (float)fundoFase1.height };
+    Rectangle dest = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+    Vector2 origin = { 0.0f, 0.0f };
+    DrawTexturePro(fundoFase1, source, dest, origin, 0.0f, WHITE);
+
+    // --- Resto dos Desenhos ---
+
     // Desenha o jogador
     DrawRectangleRec(jogador.retangulo, jogador.corPersonagem);
 
-    // Desenha efeito visual da explosão (apenas um frame)
+    // Desenha efeito visual da explosão
     if (jogador.usandoExplosao)
         DrawCircleLines(jogador.posicao.x + 20, jogador.posicao.y + 20, 150, ORANGE);
 
@@ -291,7 +325,7 @@ void DrawFase1(void)
         if (projeteis[i].ativo)
             DrawCircleV(projeteis[i].posicao, 8, PURPLE);
 
-    // Desenha o chefe (Piscando branco se levou dano)
+    // Desenha o chefe
     if (tempoDanoChefe > 0) {
         DrawRectangleRec(chefe.retangulo, WHITE);
         tempoDanoChefe--;
@@ -300,24 +334,19 @@ void DrawFase1(void)
     }
 
     // --- Interface (HUD) ---
-    
-    // Barra de vida do Chefe
     DrawText("BOSS (TANK)", 10, 10, 20, BLACK);
     DrawRectangle(10, 30, chefe.vida / 5, 20, RED);
     DrawRectangleLines(10, 30, chefe.vidaMaxima / 5, 20, BLACK);
 
-    // Barra de vida do Jogador
     DrawText("JOGADOR", 10, 400, 20, BLACK);
     DrawRectangle(10, 420, jogador.vida * 2, 20, GREEN);
     DrawRectangleLines(10, 420, jogador.vidaMaxima * 2, 20, BLACK);
 
-    // Indicadores de Cooldown (Texto muda de cor)
     Color corTiro = (jogador.tempoRecargaTiro == 0) ? BLACK : GRAY;
     Color corExplosao = (jogador.tempoRecargaExplosao == 0) ? BLACK : GRAY;
     DrawText("Mouse: Tiro 360", 350, 420, 10, corTiro);
     DrawText("X: Explosão", 460, 420, 10, corExplosao);
     
-    // Mira do mouse
     DrawCircleV(GetMousePosition(), 5, RED);
 
     // --- Tela de Pause ---
@@ -328,68 +357,56 @@ void DrawFase1(void)
         DrawText("Pressione P para continuar", 260, 240, 20, LIGHTGRAY);
     }
 
+    // --- TELA DE GAME OVER (IMAGEM) ---
+    if (gameOverAtivo)
+    {
+        // Desenha a imagem de Game Over ajustada para cobrir toda a tela
+        Rectangle sourceGO = { 0.0f, 0.0f, (float)imgGameOver.width, (float)imgGameOver.height };
+        Rectangle destGO = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+        DrawTexturePro(imgGameOver, sourceGO, destGO, origin, 0.0f, WHITE);
+    }
+
     // --- Tela da Loja (Overlay) ---
-    if (lojaAberta && !jogoPausado)
+    if (lojaAberta && !jogoPausado && !gameOverAtivo)
     {
         Vector2 mouse = GetMousePosition();
         
-        // Fundo escuro semitransparente
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.85f));
         DrawText("LOJA DE UPGRADES", 280, 80, 30, GOLD);
         DrawText(TextFormat("MOEDAS: %d", moedas), 350, 120, 20, YELLOW);
 
-        // Desenho do Botão Tiro
+        // Botões da loja
         Rectangle btnTiro = { 180, 150, 440, 40 };
-        Color corBtn1 = LIGHTGRAY;
-        Color corTexto1 = DARKGRAY;
-        
-        // Efeito Hover (passar o mouse por cima)
-        if (CheckCollisionPointRec(mouse, btnTiro)) {
-            corBtn1 = SKYBLUE;
-            corTexto1 = BLACK;
-        }
-        
+        Color corBtn1 = CheckCollisionPointRec(mouse, btnTiro) ? SKYBLUE : LIGHTGRAY;
+        Color corTexto1 = CheckCollisionPointRec(mouse, btnTiro) ? BLACK : DARKGRAY;
         DrawRectangleRec(btnTiro, corBtn1);
         DrawRectangleLinesEx(btnTiro, 2, WHITE);
         DrawText("+25% Velocidade do Tiro (30 moedas)", 200, 160, 18, corTexto1);
 
-        // Desenho do Botão Velocidade
         Rectangle btnSpeed = { 180, 200, 440, 40 };
-        Color corBtn2 = LIGHTGRAY;
-        Color corTexto2 = DARKGRAY;
-
-        if (CheckCollisionPointRec(mouse, btnSpeed)) {
-            corBtn2 = SKYBLUE;
-            corTexto2 = BLACK;
-        }
-
+        Color corBtn2 = CheckCollisionPointRec(mouse, btnSpeed) ? SKYBLUE : LIGHTGRAY;
+        Color corTexto2 = CheckCollisionPointRec(mouse, btnSpeed) ? BLACK : DARKGRAY;
         DrawRectangleRec(btnSpeed, corBtn2);
         DrawRectangleLinesEx(btnSpeed, 2, WHITE);
         DrawText("+25% Velocidade de Movimento (25 moedas)", 200, 210, 18, corTexto2);
 
-        // Desenho do Botão Dano
         Rectangle btnDano = { 180, 250, 440, 40 };
-        Color corBtn3 = LIGHTGRAY;
-        Color corTexto3 = DARKGRAY;
-
-        if (CheckCollisionPointRec(mouse, btnDano)) {
-            corBtn3 = ORANGE;
-            corTexto3 = BLACK;
-        }
-
+        Color corBtn3 = CheckCollisionPointRec(mouse, btnDano) ? ORANGE : LIGHTGRAY;
+        Color corTexto3 = CheckCollisionPointRec(mouse, btnDano) ? BLACK : DARKGRAY;
         DrawRectangleRec(btnDano, corBtn3);
         DrawRectangleLinesEx(btnDano, 2, WHITE);
         DrawText("Arma Dano+ (40 moedas)", 200, 260, 18, corTexto3);
 
-        // Desenho do Botão Sair/Avançar
         Rectangle btnSair = { 300, 350, 200, 50 };
-        Color corSair = GREEN;
-        
-        if (CheckCollisionPointRec(mouse, btnSair)) {
-            corSair = LIME;
-        }
-
+        Color corSair = CheckCollisionPointRec(mouse, btnSair) ? LIME : GREEN;
         DrawRectangleRec(btnSair, corSair);
         DrawText("AVANCAR >>", 340, 365, 20, BLACK);
     }
+}
+
+// --- Funções de Limpeza ---
+void CloseFase1(void)
+{
+    UnloadTexture(fundoFase1);
+    UnloadTexture(imgGameOver); // <--- Descarrega a imagem do Game Over também
 }
