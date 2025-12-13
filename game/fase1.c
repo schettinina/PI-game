@@ -3,29 +3,36 @@
 #include <stdio.h>
 #include "raylib.h"
 
+
+
 // --- Definições e Constantes ---
-#define MAX_TIROS 5          // Limite de tiros simultâneos na tela
-#define DANO_EXPLOSAO 60     // Dano da habilidade especial "Explosão"
+#define MAX_TIROS 5         // Limite de tiros simultâneos na tela
+#define DANO_EXPLOSAO 60    // Dano da habilidade especial "Explosão"
+#define BOSS_FRAMES 7
+
+static Texture2D bossSprites[BOSS_FRAMES];
+static int bossFrameAtual = 0;
+static int bossFrameCounter = 0; // Controla a velocidade da animação
 
 // Estrutura para os tiros do jogador
 typedef struct {
     Vector2 posicao;
     Vector2 velocidade; 
-    bool ativo;              // Flag para saber se o tiro está em uso ou disponível
+    bool ativo;         // Flag para saber se o tiro está em uso ou disponível
 } Projetil;
 
 // Estrutura genérica para Jogador e Chefe
 typedef struct {
     Vector2 posicao;
-    Rectangle retangulo;     // Hitbox para colisão
+    Rectangle retangulo;    // Hitbox para colisão
     int vida;
     int vidaMaxima;
     Color corPersonagem;
 
-    int tempoRecargaTiro;     // Cooldown do tiro básico
+    int tempoRecargaTiro;    // Cooldown do tiro básico
     int tempoRecargaExplosao; // Cooldown da habilidade especial
 
-    bool usandoExplosao;      // Flag visual para desenhar a explosão
+    bool usandoExplosao;     // Flag visual para desenhar a explosão
 } Personagem;
 
 // --- Variáveis Globais (Estado do Jogo) ---
@@ -62,7 +69,8 @@ void ResetarVariaveisFase1(void) {
 
     // Configura o Chefe
     chefe.posicao = (Vector2){ 600, 200 };
-    chefe.retangulo = (Rectangle){ 600, 200, 80, 80 };
+    // Ajustei o tamanho da hitbox do chefe para corresponder melhor aos sprites típicos (80x80)
+    chefe.retangulo = (Rectangle){ 600, 200, 80, 80 }; 
     chefe.vidaMaxima = 500;
     chefe.vida = 500;
     chefe.corPersonagem = RED;
@@ -73,7 +81,7 @@ void ResetarVariaveisFase1(void) {
     // Reseta status
     velocidadeMovimento = 4.0f;
     velocidadeTiro = 7.0f;
-    danoTiroAtual = 10;
+    danoTiroAtual = 1000;
     moedas = 0;
     lojaAberta = false;
     resultadoFase = 0;
@@ -88,6 +96,19 @@ void InitFase1(void)
     // --- CARREGANDO AS IMAGENS ---
     fundoFase1 = LoadTexture("images/fase1.png"); 
     imgGameOver = LoadTexture("images/gameover1.png"); // <--- Carrega imagem de Game Over
+    
+    // Carrega os 7 sprites do boss
+    bossSprites[0] = LoadTexture("images/r01.png");
+    bossSprites[1] = LoadTexture("images/r02.png");
+    bossSprites[2] = LoadTexture("images/r03.png");
+    bossSprites[3] = LoadTexture("images/r04.png");
+    bossSprites[4] = LoadTexture("images/r05.png");
+    bossSprites[5] = LoadTexture("images/r06.png");
+    bossSprites[6] = LoadTexture("images/r07.png");
+
+    bossFrameAtual = 0;
+    bossFrameCounter = 0;
+
 
     ResetarVariaveisFase1();
 }
@@ -325,16 +346,55 @@ void DrawFase1(void)
         if (projeteis[i].ativo)
             DrawCircleV(projeteis[i].posicao, 8, PURPLE);
 
-    // Desenha o chefe
-    if (tempoDanoChefe > 0) {
-        DrawRectangleRec(chefe.retangulo, WHITE);
-        tempoDanoChefe--;
-    } else {
-        DrawRectangleRec(chefe.retangulo, chefe.corPersonagem);
+    // --- LÓGICA DE ANIMAÇÃO DO BOSS ---
+    // A animação deve ser atualizada em 'Draw', pois é onde a visualização acontece.
+    // Isso garante que a animação rode mesmo quando o boss não está tomando dano.
+    // Se o chefe estiver morto, não desenha nem anima.
+    if (chefe.vida > 0)
+    {
+        // 1. Atualiza o frame da animação
+        // O valor '8' define a velocidade (menor valor = mais rápido)
+        bossFrameCounter++;
+        if (bossFrameCounter >= 8)
+        {
+            bossFrameCounter = 0;
+            bossFrameAtual++;
+            if (bossFrameAtual >= BOSS_FRAMES)
+                bossFrameAtual = 0;
+        }
+
+        // 2. Define a cor do desenho (Branco normal, ou tintura de DANO)
+        Color tint = WHITE;
+        if (tempoDanoChefe > 0) {
+            tint = WHITE; // Efeito de piscar (White indica que levou dano)
+            tempoDanoChefe--;
+        } else if (chefe.vida <= 0) {
+            tint = Fade(WHITE, 0.5f); // Se morto, pode escurecer um pouco (opcional)
+        }
+        
+        // Se a vida do chefe for 0, ele ainda pode aparecer por um frame, 
+        // mas a animação continua rodando. Vamos garantir que ele só apareça se vivo.
+
+        // 3. Desenha o sprite do boss no lugar do quadrado
+        // A posição é a mesma, a rotação é 0, e a escala 1.0f.
+        DrawTextureEx(
+            bossSprites[bossFrameAtual],
+            chefe.posicao,
+            0.0f,
+            1.0f,
+            tint // Aplica a tintura (WHITE normal ou WHITE/Fade se dano)
+        );
     }
+    
+    // O bloco 'else' que estava desenhando o quadrado vermelho foi removido.
+    // Se a vida for > 0, ele desenha o sprite.
+    // Se a vida for <= 0, ele não desenha nada (chefe "desaparece" após morte).
+
 
     // --- Interface (HUD) ---
     DrawText("BOSS (TANK)", 10, 10, 20, BLACK);
+    // Para barras de vida, use o tamanho da hitbox do personagem (chefe.retangulo.width)
+    // para calcular o tamanho da barra, ou um tamanho fixo, como você fez.
     DrawRectangle(10, 30, chefe.vida / 5, 20, RED);
     DrawRectangleLines(10, 30, chefe.vidaMaxima / 5, 20, BLACK);
 
@@ -408,5 +468,10 @@ void DrawFase1(void)
 void CloseFase1(void)
 {
     UnloadTexture(fundoFase1);
-    UnloadTexture(imgGameOver); // <--- Descarrega a imagem do Game Over também
+    UnloadTexture(imgGameOver); 
+    
+    // CORREÇÃO: Descarregar todos os sprites do boss
+    for (int i = 0; i < BOSS_FRAMES; i++) {
+        UnloadTexture(bossSprites[i]);
+    }
 }

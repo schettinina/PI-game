@@ -1,14 +1,29 @@
-#include "raylib.h"   
+#include "raylib.h"  
 #include "raymath.h"  
 #include "fase2.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_TIROS 20            
+#define MAX_TIROS 20          
 #define MAX_INIMIGOS_CAP 30     
 #define VEL_TIRO 9.0f
 #define DANO_TIRO 10
 #define DANO_EXPLOSAO 100       
+
+// --- SPRITES DOS INIMIGOS ---
+#define BOSS_FRAMES 7
+#define MINION_FRAMES 7 
+
+// Trocamos a associação aqui:
+static Texture2D bossSprites[BOSS_FRAMES];   // AGORA USA R-Series (Robô Menor)
+static Texture2D minionSprites[MINION_FRAMES]; // AGORA USA G-Series (Robô Maior)
+
+static int bossFrameAtual = 0;
+static int bossFrameCounter = 0; 
+
+static int minionFrameAtual = 0; 
+static int minionFrameCounter = 0;
+// ----------------------------
 
 typedef struct {
     Vector2 posicao;
@@ -27,13 +42,21 @@ typedef struct {
     bool usandoExplosao;
 } Jogador;
 
+// Enum para definir o tipo de desenho do inimigo
+typedef enum {
+    TIPO_QUADRADO,        
+    TIPO_MINION_SPRITE,   // Minions (agora G-Series, o sprite maior)
+    TIPO_BOSS_SPRITE      // Boss (agora R-Series, o sprite menor)
+} TipoDesenho;
+
 typedef struct {
-    bool ativo;             
+    bool ativo;              
     Vector2 posicao;
     Rectangle retangulo;
     int vida;
     float velocidade;
     Color cor;
+    TipoDesenho tipoDesenho; 
 } Inimigo;
 
 // Globais
@@ -44,13 +67,14 @@ static Inimigo inimigos[MAX_INIMIGOS_CAP];
 // --- VARIÁVEIS DE IMAGEM ---
 static Texture2D fundoFase2; 
 static Texture2D imgGameOverFase2; 
-static Texture2D imgVictory; // <--- IMAGEM DE VITÓRIA (wintela.png)
+static Texture2D imgVictory; 
 static bool texturaCarregada = false; 
+static int tempoDanoInimigo[MAX_INIMIGOS_CAP] = { 0 }; 
 
 // Estado do Jogo
 static int resultadoFase = 0; 
 static bool gameOverAtivo = false; 
-static bool vitoriaAtiva = false; // <--- Flag de Vitória
+static bool vitoriaAtiva = false; 
 
 // Controle de Hordas
 static int hordaAtual = 1;
@@ -61,6 +85,7 @@ static int timerSpawn = 0;
 // --- Função para Reiniciar Variáveis ---
 void ResetarVariaveisFase2(void) 
 {
+    // ... (Configurações do Jogador) ...
     jogador.posicao = (Vector2){ 400, 225 }; 
     jogador.retangulo = (Rectangle){ 400, 225, 40, 40 };
     jogador.vidaMaxima = 100; 
@@ -72,7 +97,17 @@ void ResetarVariaveisFase2(void)
 
     // Reseta arrays
     for (int i = 0; i < MAX_TIROS; i++) projeteis[i].ativo = false;
-    for (int i = 0; i < MAX_INIMIGOS_CAP; i++) inimigos[i].ativo = false;
+    for (int i = 0; i < MAX_INIMIGOS_CAP; i++) {
+        inimigos[i].ativo = false;
+        tempoDanoInimigo[i] = 0;
+        inimigos[i].tipoDesenho = TIPO_QUADRADO; 
+    }
+
+    // Reseta Frames de Animação
+    bossFrameAtual = 0;
+    bossFrameCounter = 0;
+    minionFrameAtual = 0;
+    minionFrameCounter = 0;
 
     // Reseta Hordas
     hordaAtual = 1;
@@ -83,32 +118,55 @@ void ResetarVariaveisFase2(void)
     // Reseta Estados
     resultadoFase = 0;
     gameOverAtivo = false;
-    vitoriaAtiva = false; // Reseta vitória também
+    vitoriaAtiva = false; 
 }
 
+// CORREÇÃO: Função de Spawn mantendo a lógica de Minion/Boss, mas a visualização será trocada na Init/Draw
 void SpawnInimigo()
 {
-    for (int i = 0; i < inimigosPorHorda; i++) 
+    // Lógica para spawnar o Boss Principal (EXEMPLO: Apenas uma vez na Horda 5)
+    bool deveSpawnarBossPrincipal = (hordaAtual == 5 && inimigosMortosHorda == 0); 
+
+    for (int i = 0; i < MAX_INIMIGOS_CAP; i++) 
     {
         if (!inimigos[i].ativo)
         {
-            inimigos[i].ativo = true;
-            inimigos[i].vida = 30; 
+            // --- Configuração Padrão ---
             inimigos[i].velocidade = (float)GetRandomValue(20, 40) / 10.0f; 
-            inimigos[i].cor = RED;
-            int lado = GetRandomValue(0, 3);
+            inimigos[i].ativo = true;
+            inimigos[i].cor = WHITE; 
+
+            if (deveSpawnarBossPrincipal) {
+                // --- BOSS PRINCIPAL (AGORA VISUALMENTE O R-Series/Robô Menor) ---
+                inimigos[i].vida = 300; 
+                inimigos[i].velocidade = 2.5f;
+                inimigos[i].tipoDesenho = TIPO_BOSS_SPRITE;
+                
+                // Hitbox para o Boss (Menor, correspondente ao sprite R-Series)
+                inimigos[i].posicao = (Vector2){ 400, -50 };
+                inimigos[i].retangulo = (Rectangle){ inimigos[i].posicao.x, inimigos[i].posicao.y, 40, 40 };
+                
+                deveSpawnarBossPrincipal = false; 
+            } else {
+                // --- INIMIGO COMUM (AGORA VISUALMENTE O G-Series/Robô Maior) ---
+                inimigos[i].vida = 40; 
+                inimigos[i].tipoDesenho = TIPO_MINION_SPRITE;
+                
+                // Hitbox Padrão (Maior, correspondente ao sprite G-Series)
+                int lado = GetRandomValue(0, 3);
+                if (lado == 0) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), -50 }; 
+                else if (lado == 1) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), 500 }; 
+                else if (lado == 2) inimigos[i].posicao = (Vector2){ -50, (float)GetRandomValue(0, 450) }; 
+                else if (lado == 3) inimigos[i].posicao = (Vector2){ 850, (float)GetRandomValue(0, 450) }; 
+                
+                inimigos[i].retangulo = (Rectangle){ inimigos[i].posicao.x, inimigos[i].posicao.y, 80, 80 };
+            }
             
-            // Spawn nas bordas
-            if (lado == 0) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), -50 }; 
-            if (lado == 1) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), 500 }; 
-            if (lado == 2) inimigos[i].posicao = (Vector2){ -50, (float)GetRandomValue(0, 450) }; 
-            if (lado == 3) inimigos[i].posicao = (Vector2){ 850, (float)GetRandomValue(0, 450) }; 
-            
-            inimigos[i].retangulo = (Rectangle){ inimigos[i].posicao.x, inimigos[i].posicao.y, 40, 40 };
-            break; 
+            break;
         }
     }
 }
+
 
 void InitFase2(void)
 {
@@ -117,6 +175,26 @@ void InitFase2(void)
         fundoFase2 = LoadTexture("images/fase2.png");
         imgGameOverFase2 = LoadTexture("images/gameover2.png"); 
         imgVictory = LoadTexture("images/wintela.png"); 
+        
+        // NOVO: BOSS (TIPO_BOSS_SPRITE) AGORA CARREGA R-SERIES (Roxo/Menor)
+        bossSprites[0] = LoadTexture("images/r01.png");
+        bossSprites[1] = LoadTexture("images/r02.png");
+        bossSprites[2] = LoadTexture("images/r03.png");
+        bossSprites[3] = LoadTexture("images/r04.png");
+        bossSprites[4] = LoadTexture("images/r05.png");
+        bossSprites[5] = LoadTexture("images/r06.png");
+        bossSprites[6] = LoadTexture("images/r07.png");
+
+        // NOVO: MINION (TIPO_MINION_SPRITE) AGORA CARREGA G-SERIES (Verde/Maior)
+        minionSprites[0] = LoadTexture("images/g01.png");
+        minionSprites[1] = LoadTexture("images/g02.png");
+        minionSprites[2] = LoadTexture("images/g03.png");
+        minionSprites[3] = LoadTexture("images/g04.png");
+        minionSprites[4] = LoadTexture("images/g05.png");
+        minionSprites[5] = LoadTexture("images/g06.png");
+        minionSprites[6] = LoadTexture("images/g07.png");
+
+
         texturaCarregada = true;
     }
 
@@ -128,6 +206,16 @@ void UnloadFase2(void) {
         UnloadTexture(fundoFase2);
         UnloadTexture(imgGameOverFase2);
         UnloadTexture(imgVictory);
+        
+        // Descarregando sprites do Boss (R-Series)
+        for (int i = 0; i < BOSS_FRAMES; i++) {
+            UnloadTexture(bossSprites[i]);
+        }
+        // Descarregando sprites do Minion (G-Series)
+        for (int i = 0; i < MINION_FRAMES; i++) {
+            UnloadTexture(minionSprites[i]);
+        }
+        
         texturaCarregada = false;
     }
 }
@@ -136,7 +224,6 @@ int UpdateFase2(void)
 {
     if (resultadoFase != 0) return resultadoFase;
 
-    // --- LÓGICA DE GAME OVER (Derrota) ---
     if (gameOverAtivo) 
     {
         if (IsKeyPressed(KEY_R)) {
@@ -145,17 +232,15 @@ int UpdateFase2(void)
         return 0; 
     }
 
-    // --- LÓGICA DE VITÓRIA (Vitória) ---
     if (vitoriaAtiva)
     {
-        // Se ganhar, pode apertar ENTER para sair ou R para reiniciar
         if (IsKeyPressed(KEY_ENTER)) {
-            resultadoFase = 1; // Retorna 1 (Sucesso/Próxima tela - Créditos)
+            resultadoFase = 1; 
         }
         if (IsKeyPressed(KEY_R)) {
             ResetarVariaveisFase2();
         }
-        return 0; // Para o jogo enquanto mostra a tela
+        return 0; 
     }
 
     // Movimentação Jogador
@@ -171,7 +256,6 @@ int UpdateFase2(void)
         jogador.posicao.y += inputMovimento.y * 5.0f;
     }
 
-    // Wrap-around
     if (jogador.posicao.x > 800) jogador.posicao.x = 0;
     else if (jogador.posicao.x < 0) jogador.posicao.x = 800;
     if (jogador.posicao.y > 450) jogador.posicao.y = 0;
@@ -187,7 +271,7 @@ int UpdateFase2(void)
 
     // Spawner
     timerSpawn++;
-    if (timerSpawn > 60) {
+    if (timerSpawn > 120) { 
         SpawnInimigo();
         timerSpawn = 0;
     }
@@ -221,6 +305,7 @@ int UpdateFase2(void)
             if (inimigos[i].ativo) {
                 if (CheckCollisionCircleRec(centro, 150, inimigos[i].retangulo)) {
                     inimigos[i].vida -= DANO_EXPLOSAO;
+                    tempoDanoInimigo[i] = 10;
                 }
             }
         }
@@ -234,23 +319,22 @@ int UpdateFase2(void)
                 if (inimigos[j].ativo) {
                     if (CheckCollisionCircleRec(projeteis[i].posicao, 8, inimigos[j].retangulo)) {
                         inimigos[j].vida -= DANO_TIRO;
+                        tempoDanoInimigo[j] = 10; 
                         projeteis[i].ativo = false; 
                         break; 
                     }
                 }
             }
             if (projeteis[i].posicao.x < 0 || projeteis[i].posicao.x > 800 ||
-                projeteis[i].posicao.y < 0 || projeteis[i].posicao.y > 450) {
+                 projeteis[i].posicao.y < 0 || projeteis[i].posicao.y > 450) {
                 projeteis[i].ativo = false;
             }
         }
     }
 
     // Atualiza Inimigos
-    int contagemInimigosVivos = 0;
     for (int i = 0; i < MAX_INIMIGOS_CAP; i++) {
         if (inimigos[i].ativo) {
-            contagemInimigosVivos++;
             Vector2 dir = Vector2Subtract(jogador.posicao, inimigos[i].posicao);
             dir = Vector2Normalize(dir);
             inimigos[i].posicao.x += dir.x * inimigos[i].velocidade;
@@ -264,6 +348,7 @@ int UpdateFase2(void)
             if (inimigos[i].vida <= 0) {
                 inimigos[i].ativo = false;
                 inimigosMortosHorda++;
+                tempoDanoInimigo[i] = 0;
             }
         }
     }
@@ -276,10 +361,8 @@ int UpdateFase2(void)
         jogador.vida += 20;
         if (jogador.vida > 100) jogador.vida = 100;
         
-        // --- CONDIÇÃO DE VITÓRIA ---
-        // Se a horda ficar muito grande (ex: > 30), vence o jogo
         if (inimigosPorHorda > 30) {
-            vitoriaAtiva = true; // Ativa a tela de vitória
+            vitoriaAtiva = true; 
         }
     }
 
@@ -295,32 +378,96 @@ int UpdateFase2(void)
 
 void DrawFase2(void)
 {
-    // --- DESENHO DO FUNDO AJUSTADO ---
-    if (fundoFase2.id <= 0) {
-        DrawRectangle(0, 0, 800, 450, MAGENTA);
-        DrawText("ERRO: IMAGEM FASE2 NAO ENCONTRADA", 200, 200, 20, WHITE);
-    } else {
-        Rectangle source = { 0.0f, 0.0f, (float)fundoFase2.width, (float)fundoFase2.height };
-        Rectangle dest = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
-        Vector2 origin = { 0.0f, 0.0f };
-        DrawTexturePro(fundoFase2, source, dest, origin, 0.0f, WHITE);
-    }
+    // --- DESENHO DO FUNDO E JOGADOR ---
+    Rectangle source = { 0.0f, 0.0f, (float)fundoFase2.width, (float)fundoFase2.height };
+    Rectangle dest = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+    Vector2 origin = { 0.0f, 0.0f };
+    DrawTexturePro(fundoFase2, source, dest, origin, 0.0f, WHITE);
 
-    // Desenho Jogo Normal
     DrawRectangleRec(jogador.retangulo, jogador.corPersonagem);
     if (jogador.usandoExplosao) DrawCircleLines(jogador.posicao.x+20, jogador.posicao.y+20, 150, ORANGE);
 
-    for (int i = 0; i < MAX_INIMIGOS_CAP; i++) {
-        if (inimigos[i].ativo) {
-            DrawRectangleRec(inimigos[i].retangulo, inimigos[i].cor);
-            DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, inimigos[i].vida, 3, GREEN);
-        }
-    }
-
+    // Desenha Projéteis
     for (int i = 0; i < MAX_TIROS; i++) {
         if (projeteis[i].ativo) DrawCircleV(projeteis[i].posicao, 5, YELLOW);
     }
 
+    // --- DESENHO DOS INIMIGOS (COM SPRITES R e G) ---
+    
+    // Atualização da Animação do Boss (R-Series)
+    bossFrameCounter++;
+    if (bossFrameCounter >= 8) 
+    {
+        bossFrameCounter = 0;
+        bossFrameAtual++;
+        if (bossFrameAtual >= BOSS_FRAMES)
+            bossFrameAtual = 0;
+    }
+
+    // Atualização da Animação do Minion (G-Series)
+    minionFrameCounter++;
+    if (minionFrameCounter >= 10) 
+    {
+        minionFrameCounter = 0;
+        minionFrameAtual++;
+        if (minionFrameAtual >= MINION_FRAMES)
+            minionFrameAtual = 0;
+    }
+    
+    for (int i = 0; i < MAX_INIMIGOS_CAP; i++) {
+        if (inimigos[i].ativo) {
+            
+            // Define a cor de piscar (Dano)
+            Color tint = WHITE;
+            if (tempoDanoInimigo[i] > 0) {
+                tint = LIGHTGRAY; 
+                tempoDanoInimigo[i]--;
+            }
+
+            if (inimigos[i].tipoDesenho == TIPO_BOSS_SPRITE) {
+                
+                // Desenha o BOSS (AGORA R-Series/Robô Menor)
+                DrawTextureEx(
+                    bossSprites[bossFrameAtual],
+                    inimigos[i].posicao,
+                    0.0f,
+                    0.5f, // Escala menor (0.5) para o sprite R-Series
+                    tint
+                );
+                
+                // Barra de Vida do BOSS (300 de vida total, barra de 40px)
+                int larguraBarra = 40; 
+                DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 10, larguraBarra, 5, RED);
+                DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 10, 
+                    (int)(((float)inimigos[i].vida / 300.0f) * larguraBarra), 5, GREEN); 
+
+            } else if (inimigos[i].tipoDesenho == TIPO_MINION_SPRITE) {
+                
+                // Desenha o MINION (AGORA G-Series/Robô Maior)
+                 DrawTextureEx(
+                    minionSprites[minionFrameAtual],
+                    inimigos[i].posicao,
+                    0.0f,
+                    1.0f, // Escala maior (1.0) para o sprite G-Series
+                    tint
+                );
+                
+                // Barra de Vida do MINION (40 de vida total, barra de 80px)
+                int larguraBarra = 80; 
+                DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, larguraBarra, 3, RED);
+                DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, 
+                    (int)(((float)inimigos[i].vida / 40.0f) * larguraBarra), 3, GREEN); 
+                
+            } else {
+                // Fallback para TIPO_QUADRADO
+                 DrawRectangleRec(inimigos[i].retangulo, RED);
+                 DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, inimigos[i].vida, 3, GREEN);
+            }
+        }
+    }
+    // -------------------------------------------------------------
+
+    // --- HUD ---
     DrawText(TextFormat("HORDA: %d", hordaAtual), 350, 10, 30, WHITE);
     DrawText(TextFormat("Inimigos: %d / %d", inimigosMortosHorda, inimigosPorHorda), 320, 45, 20, LIGHTGRAY);
     
@@ -330,19 +477,13 @@ void DrawFase2(void)
     
     DrawCircleV(GetMousePosition(), 5, RED);
 
-    // --- DESENHO DO GAME OVER (DERROTA) ---
+    // ... (Desenho Game Over / Vitória) ...
     if (gameOverAtivo)
     {
-        if (imgGameOverFase2.id > 0) {
-            Rectangle sourceGO = { 0.0f, 0.0f, (float)imgGameOverFase2.width, (float)imgGameOverFase2.height };
-            Rectangle destGO = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
-            Vector2 originGO = { 0.0f, 0.0f };
-            DrawTexturePro(imgGameOverFase2, sourceGO, destGO, originGO, 0.0f, WHITE);
-        } else {
-            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
-        }
-
-        // Texto piscando "TECLE R" na derrota
+        Rectangle sourceGO = { 0.0f, 0.0f, (float)imgGameOverFase2.width, (float)imgGameOverFase2.height };
+        Rectangle destGO = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+        Vector2 originGO = { 0.0f, 0.0f };
+        DrawTexturePro(imgGameOverFase2, sourceGO, destGO, originGO, 0.0f, WHITE);
         if ((int)(GetTime() * 2) % 2 == 0) {
             const char* texto = "TECLE [R] PARA REINICIAR";
             int fontSize = 30;
@@ -351,19 +492,11 @@ void DrawFase2(void)
         }
     }
 
-    // --- DESENHO DA VITÓRIA (WINTELA) ---
     if (vitoriaAtiva)
     {
-        // Apenas desenha a imagem, pois o texto já está nela
-        if (imgVictory.id > 0) {
-            Rectangle sourceWin = { 0.0f, 0.0f, (float)imgVictory.width, (float)imgVictory.height };
-            Rectangle destWin = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
-            Vector2 originWin = { 0.0f, 0.0f };
-            DrawTexturePro(imgVictory, sourceWin, destWin, originWin, 0.0f, WHITE);
-        } else {
-            // Fallback caso a imagem não carregue
-            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), GOLD);
-            DrawText("VOCE VENCEU!", 250, 200, 40, BLACK);
-        }
+        Rectangle sourceWin = { 0.0f, 0.0f, (float)imgVictory.width, (float)imgVictory.height };
+        Rectangle destWin = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+        Vector2 originWin = { 0.0f, 0.0f };
+        DrawTexturePro(imgVictory, sourceWin, destWin, originWin, 0.0f, WHITE);xxxx
     }
 }
