@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include "raylib.h"
 
-
-
 // --- Definições e Constantes ---
 #define MAX_TIROS 5         // Limite de tiros simultâneos na tela
 #define DANO_EXPLOSAO 60    // Dano da habilidade especial "Explosão"
@@ -42,7 +40,12 @@ static Projetil projeteis[MAX_TIROS]; // Array de tiros (Object Pooling)
 
 // Variáveis de IMAGEM
 static Texture2D fundoFase1; 
-static Texture2D imgGameOver; // <--- NOVA IMAGEM DE GAME OVER
+static Texture2D imgGameOver; 
+static Texture2D imgIntro; // <--- NOVA IMAGEM DE INTRO
+
+// Variáveis de Controle da Intro
+static bool mostrandoIntro = true;      // <--- Começa mostrando a intro
+static float tempoIntroContador = 0.0f; // <--- Contador de tempo da intro
 
 static int tempoDanoChefe = 0;   // Tempo que o chefe pisca branco ao levar dano
 static int resultadoFase = 0;    // 0: Jogando, 1: Vitória/Próxima Fase, 2: Saiu
@@ -53,7 +56,7 @@ static int danoTiroAtual = 10;
 static int moedas = 0;           // Moedas ganhas ao derrotar o chefe
 static bool lojaAberta = false;  // Flag para ativar a interface de loja
 static bool jogoPausado = false; // Flag de pause
-static bool gameOverAtivo = false; // <--- Flag para saber se está na tela de morte
+static bool gameOverAtivo = false; // Flag para saber se está na tela de morte
 
 // --- Função Auxiliar para Resetar o Jogo (Usada no Init e no R) ---
 void ResetarVariaveisFase1(void) {
@@ -69,7 +72,6 @@ void ResetarVariaveisFase1(void) {
 
     // Configura o Chefe
     chefe.posicao = (Vector2){ 600, 200 };
-    // Ajustei o tamanho da hitbox do chefe para corresponder melhor aos sprites típicos (80x80)
     chefe.retangulo = (Rectangle){ 600, 200, 80, 80 }; 
     chefe.vidaMaxima = 500;
     chefe.vida = 500;
@@ -95,7 +97,8 @@ void InitFase1(void)
 {
     // --- CARREGANDO AS IMAGENS ---
     fundoFase1 = LoadTexture("images/fase1.png"); 
-    imgGameOver = LoadTexture("images/gameover1.png"); // <--- Carrega imagem de Game Over
+    imgGameOver = LoadTexture("images/gameover1.png"); 
+    imgIntro = LoadTexture("images/intro1.jpg"); // <--- CARREGA A INTRO
     
     // Carrega os 7 sprites do boss
     bossSprites[0] = LoadTexture("images/r01.png");
@@ -109,6 +112,9 @@ void InitFase1(void)
     bossFrameAtual = 0;
     bossFrameCounter = 0;
 
+    // Configuração inicial da Intro
+    mostrandoIntro = true;
+    tempoIntroContador = 0.0f;
 
     ResetarVariaveisFase1();
 }
@@ -116,6 +122,19 @@ void InitFase1(void)
 // --- Loop de Atualização (Lógica) ---
 int UpdateFase1(void)
 {
+    // --- LÓGICA DA INTRODUÇÃO ---
+    if (mostrandoIntro)
+    {
+        tempoIntroContador += GetFrameTime(); // Soma o tempo que passou no último frame
+        
+        if (tempoIntroContador >= 3.0f) // Se passar de 3 segundos
+        {
+            mostrandoIntro = false; // Desativa a intro e começa o jogo
+        }
+        
+        return 0; // Retorna cedo para não processar movimento ou tiros durante a intro
+    }
+
     // Se o jogo já acabou (vitória ou saída forçada), retorna o código
     if (resultadoFase != 0) return resultadoFase;
 
@@ -326,6 +345,19 @@ int UpdateFase1(void)
 // --- Renderização (Desenho) ---
 void DrawFase1(void)
 {
+    // --- DESENHO DA INTRO (Se estiver ativa) ---
+    if (mostrandoIntro)
+    {
+        // Desenha a imagem de intro cobrindo toda a tela
+        Rectangle sourceIntro = { 0.0f, 0.0f, (float)imgIntro.width, (float)imgIntro.height };
+        Rectangle destIntro = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+        Vector2 origin = { 0.0f, 0.0f };
+        DrawTexturePro(imgIntro, sourceIntro, destIntro, origin, 0.0f, WHITE);
+        
+        // Retorna aqui para não desenhar o jogo por cima da intro
+        return;
+    }
+
     // --- DESENHO DO FUNDO (Ajustado à tela) ---
     Rectangle source = { 0.0f, 0.0f, (float)fundoFase1.width, (float)fundoFase1.height };
     Rectangle dest = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
@@ -347,13 +379,9 @@ void DrawFase1(void)
             DrawCircleV(projeteis[i].posicao, 8, PURPLE);
 
     // --- LÓGICA DE ANIMAÇÃO DO BOSS ---
-    // A animação deve ser atualizada em 'Draw', pois é onde a visualização acontece.
-    // Isso garante que a animação rode mesmo quando o boss não está tomando dano.
-    // Se o chefe estiver morto, não desenha nem anima.
     if (chefe.vida > 0)
     {
         // 1. Atualiza o frame da animação
-        // O valor '8' define a velocidade (menor valor = mais rápido)
         bossFrameCounter++;
         if (bossFrameCounter >= 8)
         {
@@ -369,32 +397,21 @@ void DrawFase1(void)
             tint = WHITE; // Efeito de piscar (White indica que levou dano)
             tempoDanoChefe--;
         } else if (chefe.vida <= 0) {
-            tint = Fade(WHITE, 0.5f); // Se morto, pode escurecer um pouco (opcional)
+            tint = Fade(WHITE, 0.5f); 
         }
         
-        // Se a vida do chefe for 0, ele ainda pode aparecer por um frame, 
-        // mas a animação continua rodando. Vamos garantir que ele só apareça se vivo.
-
-        // 3. Desenha o sprite do boss no lugar do quadrado
-        // A posição é a mesma, a rotação é 0, e a escala 1.0f.
+        // 3. Desenha o sprite do boss
         DrawTextureEx(
             bossSprites[bossFrameAtual],
             chefe.posicao,
             0.0f,
             1.0f,
-            tint // Aplica a tintura (WHITE normal ou WHITE/Fade se dano)
+            tint 
         );
     }
     
-    // O bloco 'else' que estava desenhando o quadrado vermelho foi removido.
-    // Se a vida for > 0, ele desenha o sprite.
-    // Se a vida for <= 0, ele não desenha nada (chefe "desaparece" após morte).
-
-
     // --- Interface (HUD) ---
     DrawText("BOSS (TANK)", 10, 10, 20, BLACK);
-    // Para barras de vida, use o tamanho da hitbox do personagem (chefe.retangulo.width)
-    // para calcular o tamanho da barra, ou um tamanho fixo, como você fez.
     DrawRectangle(10, 30, chefe.vida / 5, 20, RED);
     DrawRectangleLines(10, 30, chefe.vidaMaxima / 5, 20, BLACK);
 
@@ -469,6 +486,7 @@ void CloseFase1(void)
 {
     UnloadTexture(fundoFase1);
     UnloadTexture(imgGameOver); 
+    UnloadTexture(imgIntro); // <--- DESCARREGA A INTRO
     
     // CORREÇÃO: Descarregar todos os sprites do boss
     for (int i = 0; i < BOSS_FRAMES; i++) {
