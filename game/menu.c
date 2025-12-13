@@ -23,6 +23,7 @@ int main(void)
     GameScreen telaAtual = TITULO;
     SetTargetFPS(60);
 
+    // Hitboxes ajustadas
     Rectangle areaBotaoComecar = { (float)screenWidth/2 - 110, 270, 220, 50 }; 
     Rectangle areaBotaoCreditos = { (float)screenWidth/2 - 110, 340, 220, 50 };
 
@@ -109,4 +110,14 @@ int main(void)
                 } break;
             }
         EndDrawing();
-    }
+    } 
+
+    
+    UnloadTexture(start);
+    UnloadTexture(cred);
+    UnloadMusicStream(luta);
+    CloseAudioDevice();
+    CloseWindow();
+
+    return 0;
+} 
