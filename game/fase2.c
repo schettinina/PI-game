@@ -1,22 +1,21 @@
-#include "raylib.h"  
-#include "raymath.h"  
+#include "raylib.h"
+#include "raymath.h"
 #include "fase2.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_TIROS 20          
-#define MAX_INIMIGOS_CAP 30     
+#define MAX_TIROS 20
+#define MAX_INIMIGOS_CAP 30
 #define VEL_TIRO 9.0f
 #define DANO_TIRO 10
-#define DANO_EXPLOSAO 100       
+#define DANO_EXPLOSAO 100
 
 // --- SPRITES DOS INIMIGOS ---
 #define BOSS_FRAMES 7
 #define MINION_FRAMES 7 
 
-// Trocamos a associação aqui:
-static Texture2D bossSprites[BOSS_FRAMES];   // AGORA USA R-Series (Robô Menor)
-static Texture2D minionSprites[MINION_FRAMES]; // AGORA USA G-Series (Robô Maior)
+static Texture2D bossSprites[BOSS_FRAMES];   // R-Series (Robô Menor)
+static Texture2D minionSprites[MINION_FRAMES]; // G-Series (Robô Maior)
 
 static int bossFrameAtual = 0;
 static int bossFrameCounter = 0; 
@@ -45,8 +44,8 @@ typedef struct {
 // Enum para definir o tipo de desenho do inimigo
 typedef enum {
     TIPO_QUADRADO,        
-    TIPO_MINION_SPRITE,   // Minions (agora G-Series, o sprite maior)
-    TIPO_BOSS_SPRITE      // Boss (agora R-Series, o sprite menor)
+    TIPO_MINION_SPRITE,   // Minions (G-Series, maior)
+    TIPO_BOSS_SPRITE      // Boss (R-Series, menor)
 } TipoDesenho;
 
 typedef struct {
@@ -68,8 +67,13 @@ static Inimigo inimigos[MAX_INIMIGOS_CAP];
 static Texture2D fundoFase2; 
 static Texture2D imgGameOverFase2; 
 static Texture2D imgVictory; 
+static Texture2D imgIntro2; // <--- NOVA IMAGEM DE INTRO FASE 2
 static bool texturaCarregada = false; 
 static int tempoDanoInimigo[MAX_INIMIGOS_CAP] = { 0 }; 
+
+// Variáveis de Controle da Intro
+static bool mostrandoIntro = true;      // <--- Começa mostrando a intro
+static float tempoIntroContador = 0.0f; // <--- Contador de tempo da intro
 
 // Estado do Jogo
 static int resultadoFase = 0; 
@@ -121,7 +125,6 @@ void ResetarVariaveisFase2(void)
     vitoriaAtiva = false; 
 }
 
-// CORREÇÃO: Função de Spawn mantendo a lógica de Minion/Boss, mas a visualização será trocada na Init/Draw
 void SpawnInimigo()
 {
     // Lógica para spawnar o Boss Principal (EXEMPLO: Apenas uma vez na Horda 5)
@@ -137,22 +140,22 @@ void SpawnInimigo()
             inimigos[i].cor = WHITE; 
 
             if (deveSpawnarBossPrincipal) {
-                // --- BOSS PRINCIPAL (AGORA VISUALMENTE O R-Series/Robô Menor) ---
+                // --- BOSS PRINCIPAL (VISUALMENTE O R-Series/Robô Menor) ---
                 inimigos[i].vida = 300; 
                 inimigos[i].velocidade = 2.5f;
                 inimigos[i].tipoDesenho = TIPO_BOSS_SPRITE;
                 
-                // Hitbox para o Boss (Menor, correspondente ao sprite R-Series)
+                // Hitbox para o Boss (Menor)
                 inimigos[i].posicao = (Vector2){ 400, -50 };
                 inimigos[i].retangulo = (Rectangle){ inimigos[i].posicao.x, inimigos[i].posicao.y, 40, 40 };
                 
                 deveSpawnarBossPrincipal = false; 
             } else {
-                // --- INIMIGO COMUM (AGORA VISUALMENTE O G-Series/Robô Maior) ---
+                // --- INIMIGO COMUM (VISUALMENTE O G-Series/Robô Maior) ---
                 inimigos[i].vida = 40; 
                 inimigos[i].tipoDesenho = TIPO_MINION_SPRITE;
                 
-                // Hitbox Padrão (Maior, correspondente ao sprite G-Series)
+                // Hitbox Padrão (Maior)
                 int lado = GetRandomValue(0, 3);
                 if (lado == 0) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), -50 }; 
                 else if (lado == 1) inimigos[i].posicao = (Vector2){ (float)GetRandomValue(0, 800), 500 }; 
@@ -175,8 +178,9 @@ void InitFase2(void)
         fundoFase2 = LoadTexture("images/fase2.png");
         imgGameOverFase2 = LoadTexture("images/gameover2.png"); 
         imgVictory = LoadTexture("images/wintela.png"); 
+        imgIntro2 = LoadTexture("images/intro2.jpg"); // <--- CARREGA A INTRO 2
         
-        // NOVO: BOSS (TIPO_BOSS_SPRITE) AGORA CARREGA R-SERIES (Roxo/Menor)
+        // BOSS (R-SERIES)
         bossSprites[0] = LoadTexture("images/r01.png");
         bossSprites[1] = LoadTexture("images/r02.png");
         bossSprites[2] = LoadTexture("images/r03.png");
@@ -185,7 +189,7 @@ void InitFase2(void)
         bossSprites[5] = LoadTexture("images/r06.png");
         bossSprites[6] = LoadTexture("images/r07.png");
 
-        // NOVO: MINION (TIPO_MINION_SPRITE) AGORA CARREGA G-SERIES (Verde/Maior)
+        // MINION (G-SERIES)
         minionSprites[0] = LoadTexture("images/g01.png");
         minionSprites[1] = LoadTexture("images/g02.png");
         minionSprites[2] = LoadTexture("images/g03.png");
@@ -194,9 +198,12 @@ void InitFase2(void)
         minionSprites[5] = LoadTexture("images/g06.png");
         minionSprites[6] = LoadTexture("images/g07.png");
 
-
         texturaCarregada = true;
     }
+
+    // Configuração inicial da Intro
+    mostrandoIntro = true;
+    tempoIntroContador = 0.0f;
 
     ResetarVariaveisFase2();
 }
@@ -206,15 +213,11 @@ void UnloadFase2(void) {
         UnloadTexture(fundoFase2);
         UnloadTexture(imgGameOverFase2);
         UnloadTexture(imgVictory);
+        UnloadTexture(imgIntro2); // <--- DESCARREGA INTRO 2
         
-        // Descarregando sprites do Boss (R-Series)
-        for (int i = 0; i < BOSS_FRAMES; i++) {
-            UnloadTexture(bossSprites[i]);
-        }
-        // Descarregando sprites do Minion (G-Series)
-        for (int i = 0; i < MINION_FRAMES; i++) {
-            UnloadTexture(minionSprites[i]);
-        }
+        // Descarregando sprites
+        for (int i = 0; i < BOSS_FRAMES; i++) UnloadTexture(bossSprites[i]);
+        for (int i = 0; i < MINION_FRAMES; i++) UnloadTexture(minionSprites[i]);
         
         texturaCarregada = false;
     }
@@ -222,6 +225,19 @@ void UnloadFase2(void) {
 
 int UpdateFase2(void)
 {
+    // --- LÓGICA DA INTRODUÇÃO ---
+    if (mostrandoIntro)
+    {
+        tempoIntroContador += GetFrameTime(); 
+        
+        if (tempoIntroContador >= 3.0f) // 3 segundos de duração
+        {
+            mostrandoIntro = false; 
+        }
+        
+        return 0; // Pausa o update do jogo enquanto intro roda
+    }
+
     if (resultadoFase != 0) return resultadoFase;
 
     if (gameOverAtivo) 
@@ -378,6 +394,17 @@ int UpdateFase2(void)
 
 void DrawFase2(void)
 {
+    // --- DESENHO DA INTRO (Se estiver ativa) ---
+    if (mostrandoIntro)
+    {
+        Rectangle sourceIntro = { 0.0f, 0.0f, (float)imgIntro2.width, (float)imgIntro2.height };
+        Rectangle destIntro = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
+        Vector2 origin = { 0.0f, 0.0f };
+        DrawTexturePro(imgIntro2, sourceIntro, destIntro, origin, 0.0f, WHITE);
+        
+        return; // Retorna para não desenhar o jogo
+    }
+
     // --- DESENHO DO FUNDO E JOGADOR ---
     Rectangle source = { 0.0f, 0.0f, (float)fundoFase2.width, (float)fundoFase2.height };
     Rectangle dest = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
@@ -426,16 +453,16 @@ void DrawFase2(void)
 
             if (inimigos[i].tipoDesenho == TIPO_BOSS_SPRITE) {
                 
-                // Desenha o BOSS (AGORA R-Series/Robô Menor)
+                // Desenha o BOSS (R-Series)
                 DrawTextureEx(
                     bossSprites[bossFrameAtual],
                     inimigos[i].posicao,
                     0.0f,
-                    0.5f, // Escala menor (0.5) para o sprite R-Series
+                    0.5f, // Escala menor (0.5)
                     tint
                 );
                 
-                // Barra de Vida do BOSS (300 de vida total, barra de 40px)
+                // Barra de Vida do BOSS
                 int larguraBarra = 40; 
                 DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 10, larguraBarra, 5, RED);
                 DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 10, 
@@ -443,29 +470,27 @@ void DrawFase2(void)
 
             } else if (inimigos[i].tipoDesenho == TIPO_MINION_SPRITE) {
                 
-                // Desenha o MINION (AGORA G-Series/Robô Maior)
+                // Desenha o MINION (G-Series)
                  DrawTextureEx(
                     minionSprites[minionFrameAtual],
                     inimigos[i].posicao,
                     0.0f,
-                    1.0f, // Escala maior (1.0) para o sprite G-Series
+                    1.0f, // Escala maior (1.0)
                     tint
                 );
                 
-                // Barra de Vida do MINION (40 de vida total, barra de 80px)
+                // Barra de Vida do MINION
                 int larguraBarra = 80; 
                 DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, larguraBarra, 3, RED);
                 DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, 
                     (int)(((float)inimigos[i].vida / 40.0f) * larguraBarra), 3, GREEN); 
                 
             } else {
-                // Fallback para TIPO_QUADRADO
                  DrawRectangleRec(inimigos[i].retangulo, RED);
                  DrawRectangle(inimigos[i].posicao.x, inimigos[i].posicao.y - 5, inimigos[i].vida, 3, GREEN);
             }
         }
     }
-    // -------------------------------------------------------------
 
     // --- HUD ---
     DrawText(TextFormat("HORDA: %d", hordaAtual), 350, 10, 30, WHITE);
@@ -477,7 +502,7 @@ void DrawFase2(void)
     
     DrawCircleV(GetMousePosition(), 5, RED);
 
-    // ... (Desenho Game Over / Vitória) ...
+    // --- Telas Finais ---
     if (gameOverAtivo)
     {
         Rectangle sourceGO = { 0.0f, 0.0f, (float)imgGameOverFase2.width, (float)imgGameOverFase2.height };
@@ -497,6 +522,6 @@ void DrawFase2(void)
         Rectangle sourceWin = { 0.0f, 0.0f, (float)imgVictory.width, (float)imgVictory.height };
         Rectangle destWin = { 0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight() };
         Vector2 originWin = { 0.0f, 0.0f };
-        DrawTexturePro(imgVictory, sourceWin, destWin, originWin, 0.0f, WHITE);xxxx
+        DrawTexturePro(imgVictory, sourceWin, destWin, originWin, 0.0f, WHITE);
     }
 }
